@@ -1,0 +1,49 @@
+---
+- name: Deploy Quiz Builder Application to Kubernetes
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Build backend Docker image
+      docker_image:
+        name: quiz-builder-backend
+        source: build
+        build:
+          path: ../backend
+        state: present
+
+    - name: Build frontend Docker image
+      docker_image:
+        name: quiz-builder-frontend
+        source: build
+        build:
+          path: ../frontend
+        state: present
+
+    - name: Deploy MySQL to Kubernetes
+      k8s:
+        src: ../k8s/mysql-deployment.yaml
+        state: present
+
+    - name: Deploy backend to Kubernetes
+      k8s:
+        src: ../k8s/backend-deployment.yaml
+        state: present
+
+    - name: Deploy frontend to Kubernetes
+      k8s:
+        src: ../k8s/frontend-deployment.yaml
+        state: present
+
+    - name: Wait for frontend service to get external IP
+      k8s_info:
+        kind: Service
+        name: frontend-service
+        namespace: default
+      register: frontend_service
+      until: frontend_service.resources[0].status.loadBalancer.ingress is defined
+      retries: 30
+      delay: 10
+
+    - name: Display frontend URL
+      debug:
+        msg: "Application is available at: http://{{ frontend_service.resources[0].status.loadBalancer.ingress[0].ip }}"
